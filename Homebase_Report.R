@@ -14,21 +14,22 @@ options(java.parameters = "-Xmx14336m")  ## memory set to 14 GB
 #executionPath <- args[5]
 
 # PC
-# nameOfReport <- "Homebase_Report.R"
-# hmisDataPath <- "E:/Dropbox/HMIS/Warehouse/All Programs -- 5.1 -- 12-1-2016 to 2-28-2017"
-# vispdatDataPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report/VI-SPDAT and HUD Flat Export for SQL -- 3-6-2017.xlsx"
-# staffInfoDataPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report/Staff Contact Info for SQL -- 3-6-2017.xlsx"
-# executionPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report"
-# hmisFunctions <- "E:/Dropbox/HMIS/HMIS_R_Functions/HMIS_R_Functions.R"
-
-# Mac PC
 nameOfReport <- "Homebase_Report.R"
-hmisDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Warehouse/All Programs 12-18-2016 to 03-18-2017/"
-vispdatDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report/VI-SPDAT and HUD Flat Export for SQL -- 3-6-2017.xlsx"
-staffInfoDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report/Staff Contact Info for SQL -- 3-6-2017.xlsx"
-executionPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report"
-hmisFunctionsFilePath <- "C:/Users/Ladvien/Dropbox/HMIS/HMIS_R_Functions/HMIS_R_Functions.R"
-homebaseFunctionFilePath <- "C:/Users/Ladvien/Dropbox/HMIS/Homebase_Function/Homebase_Function.R"
+hmisDataPath <- "E:/Dropbox/HMIS/Warehouse/All Programs -- 5.1 -- 12-1-2016 to 2-28-2017"
+vispdatDataPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report/VI-SPDAT and HUD Flat Export for SQL -- 3-6-2017.xlsx"
+staffInfoDataPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report/Staff Contact Info for SQL -- 3-6-2017.xlsx"
+executionPath <- "E:/Dropbox/HMIS/Coordinated_Entry_Report"
+hmisFunctionsFilePath <- "E:/Dropbox/HMIS/HMIS_R_Functions/HMIS_R_Functions.R"
+homebaseFunctionFilePath <- "E:/Dropbox/HMIS/Homebase_Function/Homebase_Function.R"
+outputPath <- "E:/Dropbox/HMIS/Warehouse"
+# Mac PC
+#nameOfReport <- "Homebase_Report.R"
+#hmisDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Warehouse/All Programs 12-18-2016 to 03-18-2017/"
+#vispdatDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report/VI-SPDAT and HUD Flat Export for SQL -- 3-6-2017.xlsx"
+#staffInfoDataPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report/Staff Contact Info for SQL -- 3-6-2017.xlsx"
+#executionPath <- "C:/Users/Ladvien/Dropbox/HMIS/Coordinated_Entry_Report"
+#hmisFunctionsFilePath <- "C:/Users/Ladvien/Dropbox/HMIS/HMIS_R_Functions/HMIS_R_Functions.R"
+#homebaseFunctionFilePath <- "C:/Users/Ladvien/Dropbox/HMIS/Homebase_Function/Homebase_Function.R"
 
 # Mac
 #nameOfReport <- "Homebase_Report.R"
@@ -83,27 +84,6 @@ homebase_active <- sqldf("SELECT *
                   ORDER BY ChronicallyHomeless DESC, ScoreVISPDAT DESC
                   ")
 
-# homebase_possibly_active <- sqldf("SELECT *
-#                       FROM homebase_all
-#                         WHERE (
-#                             ( RecentHUDEntryDate > DATE('NOW', '-90 DAY')
-#                               OR (MostRecentHUDAssess != NULL AND MostRecentHUDAssess > DATE('NOW', '-90 DAY'))
-#                             ) AND
-#                             (
-#                               DateOfVISPDAT < DATE('NOW', '-90 DAY')
-#                             ) 
-#                             OR
-#                             ( RecentHUDEntryDate < DATE('NOW', '-90 DAY')
-#                               OR (MostRecentHUDAssess != NULL AND MostRecentHUDAssess < DATE('NOW', '-90 DAY'))
-#                             ) AND
-#                             (
-#                               DateOfVISPDAT < DATE('NOW', '-90 DAY')
-#                             )
-#                           )
-#                           AND ActiveInPH IS NOT 'Yes'
-#                       ORDER BY ChronicallyHomeless DESC, ScoreVISPDAT DESC
-#                       ")
-
 tmp_possibly_active <- sqldf("SELECT *
                              FROM homebase_all
                              WHERE ( MostRecentHUDAssess > DATE('NOW', '-90 DAY')) 
@@ -141,11 +121,10 @@ homebase_assistToList <- sqldf("SELECT DISTINCT StaffName, COUNT(StaffName) As '
                     ORDER BY AssistToList DESC
                     ")
 
-remove(list=c("targetClient"))
 
 detach("package:XLConnect", unload = TRUE)
 library(xlsx)
-setwd(executionPath)
+setwd(outputPath)
 write.xlsx(homebase_psh, file="Homebase_v2.xlsx", sheetName="EligibleForPSH", row.names=FALSE, showNA=FALSE)
 write.xlsx(homebase_rrh, file="Homebase_v2.xlsx", sheetName="EligibleForRRH", row.names=FALSE, showNA=FALSE, append=TRUE)
 write.xlsx(homebase_possibly_active, file="Homebase_v2.xlsx", sheetName="Possibly Active", row.names=FALSE, showNA=FALSE, append=TRUE)
