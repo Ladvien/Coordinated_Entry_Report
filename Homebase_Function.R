@@ -3,7 +3,9 @@ homebase <- function(
   vispdatDataPath,
   staffInfoDataPath,
   executionPath,
-  hmisFunctionsFilePath) {
+  hmisFunctionsFilePath,
+  viSpdat2DataPath) {
+
   library("tcltk")
   
   # Load the weights for progress bar
@@ -41,22 +43,23 @@ homebase <- function(
               makeHmisCodesReadableIncrement +
               formatHomebaseIncrement
   )
-  
-  # Initialize progress bar
+      # Initialize progress bar
   pbCounter = 0
   pb <- tkProgressBar(title = "Homebase Function", min = 0,
                       max = total, width = 300)
   
   ###### START ##########
   setTkProgressBar(pb, pbCounter, label = "Loading Packages")
-  
+
   # There needs to be a lot of allocated memory for Java for
   # XLConnect to work.
-  options(java.parameters = "-Xmx14336m") ## memory set to 14 GB
-  library("sqldf")
-  library("XLConnect")
+    options(java.parameters = "-Xmx14336m") ## memory set to 14 GB
+
+  library(sqldf)
+  library(XLConnect)
   library(xlsx)
-  
+
+
   # Load the HMIS functions.
   source(hmisFunctionsFilePath)
   
@@ -157,7 +160,7 @@ homebase <- function(
   remove(list = c("staffInfo"))
   
   # Add the Staff and Project information back to client list.
-  targetClient <- sqldf("SELECT a.*, b.MostRecentHUDAssess, b.StaffName, b.StaffEmail, b.ProjectName As 'LastProgramInContact', b.ReadableProjectType As 'LastProjectContacted'
+  targetClient <- sqldf("SELECT a.*, b.MostRecentHUDAssess, b.StaffName, b.StaffEmail, b.ProjectName As 'LastProgramInContact', b.ReadableProjectType As 'LastProjectTypeContacted'
                         FROM targetClient a
                         LEFT JOIN df7 b
                         ON a.PersonalID=b.PersonalID
@@ -173,32 +176,94 @@ homebase <- function(
   
   # Load VI-SPDAT information
   viSpdat <- readWorksheetFromFile(vispdatDataPath, sheet = 1, startRow = 1)
-  # Clean up VI-SPDAT formatting
+  viSpdat2 <- readWorksheetFromFile(viSpdat2DataPath, sheet = 1, startRow = 1)
+
+  # Clean up VI-SPDAT1 formatting
   colnames(viSpdat)[6] <- "DateOfVISPDAT"
   viSpdat$DateOfVISPDAT <- as.character(viSpdat$DateOfVISPDAT)
   viSpdat$Participant.Enterprise.Identifier <- gsub("-", "", viSpdat$Participant.Enterprise.Identifier)
   viSpdat$Family.Enterprise.Identifier <- gsub("-", "", viSpdat$Family.Enterprise.Identifier)
   viSpdat$Family.Enterprise.Identifier <- gsub("\\{", "", viSpdat$Family.Enterprise.Identifier)
-  viSpdat$Family.Enterprise.Identifier <- gsub("\\}", "", viSpdat$Family.Enterprise.Identifier)
-  
-  colnames(viSpdat)[1] <- "PersonalID"
-  
-  # Get most recent VI-SPDAT per client.
+    viSpdat$Family.Enterprise.Identifier <- gsub("\\}", "", viSpdat$Family.Enterprise.Identifier)
+    colnames(viSpdat)[1] <- "PersonalID"
+
+  # Clean up VI-SPDAT2 formatting
+  viSpdat2$DateOfVISPDAT <- as.character(viSpdat2$DateOfVISPDAT)
+  viSpdat2$PersonalID <- gsub("-", "", viSpdat2$PersonalID)
+    
+    # Get most recent VI-SPDAT per client.
   viSpdat <- getMostRecentRecordsPerId(viSpdat, "PersonalID", "DateOfVISPDAT")
-  
+  viSpdat2 <- getMostRecentRecordsPerId(viSpdat2, "PersonalID", "DateOfVISPDAT")
+
+    # Shape VI-SPDAT to look like VI-SPDAT 2
+    viSpdat <- sqldf("SELECT PersonalID, DateOfVISPDAT As 'DateOfVISPDAT', '' As VISPDATTotalFamilyScore, '' As VISPDATTotalYouthScore, ScoreVISPDAT As 'VISPDATTotalIndividualScore', 'Individual' As TypeOfViSpdat FROM viSpdat")
+    viSpdat2 <- sqldf("SELECT PersonalID, DateOfVISPDAT, VISPDATTotalFamilyScore, VISPDATTotalYouthScore, VISPDATTotalIndividualScore, TypeOfViSpdat FROM viSpdat2")
+
+    allVispdat <- rbind(viSpdat, viSpdat2)
+
+    # Get max between new and old VI-SPDAT
+    allVispdat <- getMostRecentRecordsPerId(allVispdat, "PersonalID", "DateOfVISPDAT")
+
+    allVispdat <- unique(allVispdat)
+
+   
+    allVispdat$VISPDATTotalIndividualScore[allVispdat$VISPDATTotalIndividualScore == ''] <- '0'
+    allVispdat$VISPDATTotalFamilyScore[allVispdat$VISPDATTotalFamilyScore == ''] <- '0'
+    allVispdat$VISPDATTotalYouthScore[allVispdat$VISPDATTotalYouthScore == ''] <- '0'
+
+    allVispdat$VISPDATTotalIndividualScore[is.na(allVispdat$VISPDATTotalIndividualScore)] <- '0'
+    allVispdat$VISPDATTotalFamilyScore[is.na(allVispdat$VISPDATTotalFamilyScore)] <- '0'
+    allVispdat$VISPDATTotalYouthScore[is.na(allVispdat$VISPDATTotalYouthScore)] <- '0'
+
+
+    allVispdat$VISPDATTotalIndividualScore <- as.integer(allVispdat$VISPDATTotalIndividualScore)
+    allVispdat$VISPDATTotalFamilyScore <- as.integer(allVispdat$VISPDATTotalFamilyScore)
+    allVispdat$VISPDATTotalYouthScore <- as.integer(allVispdat$VISPDATTotalYouthScore)
+    
+    allVispdat <- subset(allVispdat)
+    # Make one column for score.
+    #allVispdat <- sqldf("SELECT *, CASE 
+                                    #WHEN (VISPDATTotalFamilyScore IS '' 
+                                          #AND VISPDATTotalYouthScore IS '') 
+                                          #THEN VISPDATTotalIndividualScore
+                                    #WHEN (VISPDATTotalFamilyScore IS '' 
+                                          #AND VISPDATTotalIndividualScore IS '') 
+                                          #THEN VISPDATTotalYouthScore
+                                          #ELSE VISPDATTotalFamilyScore
+                                   #END As 'ScoreVISPDAT'
+                        #FROM allVispdat
+                        #ORDER BY ScoreVISPDAT DESC
+                      #")
+
+    allVispdat <- sqldf("SELECT *, CASE 
+                                    WHEN (VISPDATTotalFamilyScore <= VISPDATTotalIndividualScore
+                                          AND VISPDATTotalYouthScore <= VISPDATTotalIndividualScore) 
+                                          THEN VISPDATTotalIndividualScore
+                                    WHEN (VISPDATTotalFamilyScore <= VISPDATTotalYouthScore
+                                          AND VISPDATTotalIndividualScore <= VISPDATTotalYouthScore) 
+                                          THEN VISPDATTotalYouthScore
+                                          ELSE VISPDATTotalFamilyScore
+                                   END As 'ScoreVISPDAT'
+                        FROM allVispdat
+                        ORDER BY ScoreVISPDAT DESC
+                      ")
+
+    allVispdat$ScoreVISPDAT <- as.numeric(allVispdat$ScoreVISPDAT)
+
   targetClient <- subset(targetClient)
-  
+
+
   # Add VI-SPDAT scores and dates to the client list.
-  targetClient <- sqldf("SELECT a.*, b.ScoreVISPDAT, b.DateOfVISPDAT
+  targetClient <- sqldf("SELECT a.*, b.ScoreVISPDAT, b.DateOfVISPDAT, b.TypeOfVispdat
                         FROM targetClient a
-                        LEFT JOIN viSpdat b
+                        LEFT JOIN allVispdat b
                         ON a.PersonalID=b.PersonalID
                         ")
   
   # Just in case, make date SQLite friendly.
   targetClient$DateOfVISPDAT <- as.character(targetClient$DateOfVISPDAT)
   
-  remove(list = c("viSpdat"))
+  remove(list = c("viSpdat", "viSpdat2", "allVispdat"))
   
   pbCounter <- pbCounter + addVispdatIncrement
   setTkProgressBar(pb, pbCounter, label = "Getting Family with Child")
@@ -333,6 +398,7 @@ homebase <- function(
                         MostRecentHUDAssess,
                         FamilyWithChildren,
                         ScoreVISPDAT,
+                        TypeOfViSpdat,
                         DateOfVISPDAT,
                         PhysicalDisability,
                         DevelopmentalDisability,
@@ -343,7 +409,7 @@ homebase <- function(
                         StaffName,
                         StaffEmail,
                         LastProgramInContact,
-                        LastProjectContacted,
+                        LastProjectTypeContacted,
                         ActiveInPH
                         FROM targetClient a
                         ")
